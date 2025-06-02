@@ -1,75 +1,69 @@
-// Import the required libraries
-const express = require('express'); // Express is the web framework
-const fetch = require('node-fetch'); // Lets us make HTTP requests (like axios)
-const { createProxyMiddleware } = require('http-proxy-middleware'); // Used to forward requests
+const express = require('express');
+const fetch = require('node-fetch');
+const { createProxyMiddleware } = require('http-proxy-middleware');
 
-// Create the Express app
 const app = express();
 
-// This is the base URL of your Workday environment
-const WORKDAY_BASE = 'https://wcpdev.wd101.myworkday.com/huronsrv_wcpdev2';
+// Base Workday domain
+const WORKDAY_BASE = 'https://wcpdev.wd101.myworkday.com';
 
-// Special route where you want to inject your iframe
-app.use('/workday/d/iframepage', async (req, res) => {
+//Route that injects the iframe on the Extend time entry app page
+app.use('/huronsrv_wcpdev2/d/wday/app/timeEntryApplication_xqscgx/timeEntryApplication_xqscgx.htmld', async (req, res) => {
   try {
-    // Build the full URL to fetch from Workday
+    // Forward request to the real Workday page
     const targetUrl = WORKDAY_BASE + req.originalUrl;
 
-    // Send the HTTP request to Workday, forwarding user headers (cookies, etc.)
     const proxyRes = await fetch(targetUrl, {
       headers: {
         ...req.headers,
-        host: undefined // Remove host header so it doesn’t confuse Workday
+        host: undefined // avoid host header issues
       }
     });
 
-    // Get the content type (HTML, JSON, etc.)
     const contentType = proxyRes.headers.get('content-type') || '';
-
-    // Read the response body (HTML text)
     let body = await proxyRes.text();
 
-    // If it's an HTML page, inject the iframe before the </body> tag
     if (contentType.includes('text/html')) {
+      // Inject iframe before </body>
       body = body.replace('</body>', `
         <iframe src="https://youriframe.azurewebsites.net"
-                style="position:fixed;bottom:20px;right:20px;width:400px;height:300px;z-index:9999;border:2px solid red;">
+                style="position:fixed;bottom:20px;right:20px;width:400px;height:300px;
+                       z-index:9999;border:2px solid red;border-radius:8px;background:white;">
         </iframe></body>`);
     }
 
-    // Send the modified HTML back to the browser
     res.status(proxyRes.status)
        .set('content-type', contentType)
        .send(body);
   } catch (error) {
-    // If something goes wrong, show an error
     console.error('Error injecting iframe:', error);
     res.status(500).send('Proxy error while injecting iframe');
   }
 });
 
-// Catch-all proxy: for all other /workday requests
-// This passes everything through to Workday without changing it
-app.use('/workday', createProxyMiddleware({
-  target: WORKDAY_BASE,         // Where to send requests
-  changeOrigin: true,           // Needed for virtual hosts (Workday expects this)
-  cookieDomainRewrite: 'localhost', // Allows local cookies to work while testing
-  secure: false,                // If you're using self-signed certs in dev, skip security checks
-  logLevel: 'debug'             // Optional: logs each proxied request (helpful for debugging)
-}));
 
-
-// Proxy login-related requests to the Workday login base
-app.use('/wday/authgwy', createProxyMiddleware({
-  target: WORKDAY_LOGIN_BASE,
+// Proxy login route directly (no changes to response)
+app.use('/wday/authgwy/huronsrv_wcpdev2/login.htmld', createProxyMiddleware({
+  target: WORKDAY_BASE,
   changeOrigin: true,
   cookieDomainRewrite: 'localhost',
   secure: false,
   logLevel: 'debug'
 }));
 
-// Start the server on port 3000 or whatever Azure tells it to use
+
+// Catch-all proxy for all other huronsrv_wcpdev2 routes (Workday app UI)
+app.use('/huronsrv_wcpdev2', createProxyMiddleware({
+  target: WORKDAY_BASE,
+  changeOrigin: true,
+  cookieDomainRewrite: 'localhost',
+  secure: false,
+  logLevel: 'debug'
+}));
+
+
+// Start server
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
-  console.log(`Proxy running at http://localhost:${PORT}`);
+  console.log(`Proxy server running at http://localhost:${PORT}`);
 });
