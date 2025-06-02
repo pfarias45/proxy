@@ -58,6 +58,16 @@ app.use('/workday', createProxyMiddleware({
   logLevel: 'debug'             // Optional: logs each proxied request (helpful for debugging)
 }));
 
+
+// Proxy login-related requests to the Workday login base
+app.use('/wday/authgwy', createProxyMiddleware({
+  target: WORKDAY_LOGIN_BASE,
+  changeOrigin: true,
+  cookieDomainRewrite: 'localhost',
+  secure: false,
+  logLevel: 'debug'
+}));
+
 // Start the server on port 3000 or whatever Azure tells it to use
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
